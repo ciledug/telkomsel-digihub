@@ -123,6 +123,7 @@ class TelcoV1Controller extends Controller
                 }
                 else {
                     $decipherResponse = $this->decipherResponse($response, $this->ENCRYPTION_KEY);
+                    unset($requestMessage['transaction']['partner_id']);
 
                     $this->RESPONSE['code'] = 200;
                     $this->RESPONSE['message'] = 'OK';

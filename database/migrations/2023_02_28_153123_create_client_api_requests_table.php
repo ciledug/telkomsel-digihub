@@ -3,12 +3,9 @@
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Database\Migrations\Migration;
-use Illuminate\Database\Eloquent\SoftDeletes;
 
-class CreateUsersTable extends Migration
+class CreateClientAPIRequestsTable extends Migration
 {
-    use SoftDeletes;
-    
     /**
      * Run the migrations.
      *
@@ -16,18 +13,17 @@ class CreateUsersTable extends Migration
      */
     public function up()
     {
-        Schema::create('users', function (Blueprint $table) {
+        Schema::create('client_api_requests', function (Blueprint $table) {
             $table->engine = 'MyISAM';
             $table->collation = 'utf8mb4_unicode_ci';
 
             $table->increments('id');
-            $table->string('name', 50);
-            $table->string('email', 50)->unique()->nullable();
-            $table->string('username', 50)->unique();
-            $table->string('password');
-            $table->rememberToken();
+            $table->integer('client_id')->unsigned();
+            $table->tinyInteger('product_id')->unsigned()->nullable();
+            $table->string('transaction_id', 30)->nullable();
+            $table->string('consent_ref')->nullable();
+            $table->integer('created_at_timestamp')->nullable();
             $table->timestamps();
-            $table->softDeletes();
         });
     }
 
@@ -38,6 +34,6 @@ class CreateUsersTable extends Migration
      */
     public function down()
     {
-        Schema::dropIfExists('users');
+        Schema::dropIfExists('client_api_requests');
     }
 }

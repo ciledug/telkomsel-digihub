@@ -3,8 +3,14 @@
 namespace App\Http\Controllers\API\Telco;
 
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Validator;
 use App\Http\Controllers\Controller;
+use Carbon\Carbon;
+
+use App\Models\ClientApiRequest;
+use App\Models\ClientApiResponse;
+use App\Models\Product;
 
 class TelcoV1Controller extends Controller
 {
@@ -13,6 +19,7 @@ class TelcoV1Controller extends Controller
     private $SECRET_KEY = 'NzvmY';
     private $ENCRYPTION_KEY = 'DAL9ac1d89e';
     private $PARTNER_ID = 'dalnet';
+    private $CLIENT_ID = 'dalnet-test';
     private $AES_256_CBC = 'aes-256-cbc';
     private $CHANNEL = 'internal-reseller';
     private $PRODUCT_IDS = [
@@ -43,7 +50,6 @@ class TelcoV1Controller extends Controller
      */
     public function create()
     {
-        //
     }
 
     /**
@@ -63,83 +69,116 @@ class TelcoV1Controller extends Controller
             'consent' => 'required|string',
         ]);
 
+        $product = Product::select('id', 'name', 'telco_name')
+            ->where('telco_name', '=', $request->product_id)
+            ->first();
+
+        $statusCode = '-1';
+        $statusDesc = '';
+        $requestId = $this->saveApiRequest(
+            Auth::user()->id,
+            $request->transaction_id,
+            isset($product->id) ? $product->id : 0,
+            $request->consent,
+            Carbon::now('Asia/Jakarta')->getTimestamp()
+        );
+        
         if ($validator->fails()) {
             $this->RESPONSE['message'] = $validator->errors();
+            $statusDesc = json_encode($this->RESPONSE['message']);
         }
         else {
-            $requestMessage = '';
+            if ($product) {
+                $requestMessage = '';
 
-            switch ($request->product_id) {
-                case 'idver': $requestMessage = $this->prepareLocationScoringRequestMessage($request); break;
-                case 'ktpscore': $requestMessage = $this->prepareKtpMatchRequestMessage($request); break;
-                case 'recycle': $requestMessage = $this->prepareRecycleNumberRequestMessage($request); break;
-                case 'roaming2': $requestMessage = $this->prepareActiveRoamingRequestMessage($request); break;
-                case 'lastloc2': $requestMessage = $this->prepareLastLocationRequestMessage($request); break;
-                case 'loyalist': $requestMessage = $this->prepareInterestRequestMessage($request); break;
-                case 'telcoses': $requestMessage = $this->prepareTelcoSesRequestMessage($request); break;
-                case 'substat2': $requestMessage = $this->prepareActiveStatusRequestMessage($request); break;
-                case 'numberswitching2': $requestMessage = $this->prepareOneImeiMultipleNumberRequestMessage($request); break;
-                case 'forwarding2': $requestMessage = $this->prepareCallForwardingStatusRequestMessage($request); break;
-                case 'simswap': $requestMessage = $this->prepareSimSwapRequestMessage($request); break;
-                case 'tscore': $requestMessage = $this->prepareTelcoScoreBin25RequestMessage($request); break;
-                default: break;
-            }
-            
-            if (!empty($requestMessage)) {
-                $cipherText = $this->AESCBCEncrypt(json_encode($requestMessage), $this->ENCRYPTION_KEY);
-                $requestMessage = $this->createRequestMessage($request, $cipherText);
+                switch ($product->telco_name) {
+                    case 'idver': $requestMessage = $this->prepareLocationScoringRequestMessage($request); break;
+                    case 'ktpscore': $requestMessage = $this->prepareKtpMatchRequestMessage($request); break;
+                    case 'recycle': $requestMessage = $this->prepareRecycleNumberRequestMessage($request); break;
+                    case 'roaming2': $requestMessage = $this->prepareActiveRoamingRequestMessage($request); break;
+                    case 'lastloc2': $requestMessage = $this->prepareLastLocationRequestMessage($request); break;
+                    case 'loyalist': $requestMessage = $this->prepareInterestRequestMessage($request); break;
+                    case 'telcoses': $requestMessage = $this->prepareTelcoSesRequestMessage($request); break;
+                    case 'substat2': $requestMessage = $this->prepareActiveStatusRequestMessage($request); break;
+                    case 'numberswitching2': $requestMessage = $this->prepareOneImeiMultipleNumberRequestMessage($request); break;
+                    case 'forwarding2': $requestMessage = $this->prepareCallForwardingStatusRequestMessage($request); break;
+                    case 'simswap': $requestMessage = $this->prepareSimSwapRequestMessage($request); break;
+                    case 'tscore': $requestMessage = $this->prepareTelcoScoreBin25RequestMessage($request); break;
+                    default: break;
+                }
+                
+                if (!empty($requestMessage)) {
+                    $cipherText = $this->AESCBCEncrypt(json_encode($requestMessage), $this->ENCRYPTION_KEY);
+                    $requestMessage = $this->createRequestMessage($request, $cipherText);
+    
+                    $curl = curl_init();
+    
+                    curl_setopt_array(
+                        $curl,
+                        array(
+                            CURLOPT_URL => $this->API_URL,
+                            CURLOPT_RETURNTRANSFER => true,
+                            CURLOPT_ENCODING => "",
+                            CURLOPT_MAXREDIRS => 10,
+                            CURLOPT_TIMEOUT => 30,
+                            CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
+                            CURLOPT_CUSTOMREQUEST => "POST",
+                            CURLOPT_POSTFIELDS => json_encode($requestMessage),
+                            CURLOPT_HTTPHEADER => array(
+                                "Accept: */*",
+                                "api_key: " . $this->API_KEY,
+                                "x-signature: " . $this->createSignature($this->API_KEY, $this->SECRET_KEY),
+                                "Content-Type: application/json"
+                            ),
+                            CURLOPT_SSL_VERIFYHOST => storage_path('cacert/cacert.pem'),
+                            CURLOPT_SSL_VERIFYPEER => storage_path('cacert/cacert.pem'),
+                        )
+                    );
+    
+                    $response = curl_exec($curl); // dd(json_decode($response));
+                    $err = curl_error($curl);
+                    $jsonResponse = '';
+                    
+                    curl_close($curl);
+                    
+                    if ($err) {
+                        $this->RESPONSE['message'] = $err;
+                        $jsonResponse = json_decode($response); // dd($jsonResponse); die();
 
-                $curl = curl_init();
-    
-                curl_setopt_array(
-                    $curl,
-                    array(
-                        CURLOPT_URL => $this->API_URL,
-                        CURLOPT_RETURNTRANSFER => true,
-                        CURLOPT_ENCODING => "",
-                        CURLOPT_MAXREDIRS => 10,
-                        CURLOPT_TIMEOUT => 30,
-                        CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
-                        CURLOPT_CUSTOMREQUEST => "POST",
-                        CURLOPT_POSTFIELDS => json_encode($requestMessage),
-                        CURLOPT_HTTPHEADER => array(
-                            "Accept: */*",
-                            "api_key: " . $this->API_KEY,
-                            "x-signature: " . $this->createSignature($this->API_KEY, $this->SECRET_KEY),
-                            "Content-Type: application/json"
-                        ),
-                        CURLOPT_SSL_VERIFYHOST => storage_path('cacert/cacert.pem'),
-                        CURLOPT_SSL_VERIFYPEER => storage_path('cacert/cacert.pem'),
-                    )
-                );
-    
-                $response = curl_exec($curl);
-                $err = curl_error($curl);
-                
-                curl_close($curl);
-                
-                if ($err) {
-                    $this->RESPONSE['message'] = $err;
+                        if ($jsonResponse != null) {
+                            $statusCode = $jsonResponse->data->api_response->transaction->status_code;
+                            $this->RESPONSE['message'] = $jsonResponse->data->api_response->transaction->status_desc;
+                        }
+                    }
+                    else {
+                        $decipherResponse = $this->decipherResponse($response, $this->ENCRYPTION_KEY);
+                        unset($requestMessage['transaction']['partner_id']);
+                        $requestMessage['transaction']['client_id'] = $request->client_id;
+
+                        $this->RESPONSE['code'] = 200;
+                        $this->RESPONSE['message'] = json_decode($response)->transaction->status_desc;
+                        $this->RESPONSE['count'] = 1;
+                        $this->RESPONSE['data']['api_request'] = $requestMessage;
+                        $this->RESPONSE['data']['api_response'] = json_decode($response);
+                        $this->RESPONSE['data']['api_result'] = $decipherResponse;
+
+                        $statusCode = json_decode($response)->transaction->status_code;
+                    }
                 }
                 else {
-                    $decipherResponse = $this->decipherResponse($response, $this->ENCRYPTION_KEY);
-                    unset($requestMessage['transaction']['partner_id']);
-
-                    $this->RESPONSE['code'] = 200;
-                    $this->RESPONSE['message'] = 'OK';
-                    $this->RESPONSE['count'] = 1;
-                    $this->RESPONSE['data']['request'] = $requestMessage;
-                    $this->RESPONSE['data']['api_response'] = json_decode($response);
-                    $this->RESPONSE['data']['result'] = $decipherResponse;
+                    $this->RESPONSE['code'] = 404;
+                    $this->RESPONSE['message'] = 'Unknown API call';
                 }
             }
             else {
                 $this->RESPONSE['code'] = 404;
-                $this->RESPONSE['message'] = 'Unknown API call';
+                $this->RESPONSE['message'] = 'Product does not exist.';
             }
-
-            return response()->json($this->RESPONSE, 200);
         }
+
+        // dd($this->RESPONSE);
+        $this->saveApiResponse($requestId->id, $statusCode, $this->RESPONSE['message']);
+        return response()->json($this->RESPONSE, 200);
     }
 
     /**
@@ -150,7 +189,6 @@ class TelcoV1Controller extends Controller
      */
     public function show($id)
     {
-        //
     }
 
     /**
@@ -161,7 +199,6 @@ class TelcoV1Controller extends Controller
      */
     public function edit($id)
     {
-        //
     }
 
     /**
@@ -173,7 +210,6 @@ class TelcoV1Controller extends Controller
      */
     public function update(Request $request, $id)
     {
-        //
     }
 
     /**
@@ -184,7 +220,6 @@ class TelcoV1Controller extends Controller
      */
     public function destroy($id)
     {
-        //
     }
 
     private function prepareLocationScoringRequestMessage($request)
@@ -244,7 +279,7 @@ class TelcoV1Controller extends Controller
 
     private function prepareInterestRequestMessage($request)
     {
-        $plainText = [
+        $apiParams = [
             'transaction_id' => $request->transaction_id,
             'msisdn' => $request->msisdn_imei_key,
             'partner_name' => $request->partner
@@ -319,7 +354,7 @@ class TelcoV1Controller extends Controller
 
     private function createRequestMessage($request, $cipherText)
     {
-        $POSTED_DATA_ARRAY = array(
+        $requestData = array(
             'transaction' => array(
                 'transaction_id' => $request->transaction_id,
                 'partner_id' => $this->PARTNER_ID,
@@ -331,9 +366,14 @@ class TelcoV1Controller extends Controller
                 'ciphertext' => $cipherText,
               ),
         );
+        $isDebug = env('APP_DEBUG', false);
+
+        if (!$isDebug) {
+            $requestData['transaction']['client_id'] = $this->CLIENT_ID;
+        }
         
-        // dd($POSTED_DATA_ARRAY);
-        return $POSTED_DATA_ARRAY;
+        // dd($requestData);
+        return $requestData;
     }
 
     private function createSignature($apiKey, $secretKey) {
@@ -375,5 +415,26 @@ class TelcoV1Controller extends Controller
         $bFinalCipherText = substr($bCipherText, $blockSize);
         $bPlaintext = openssl_decrypt($bFinalCipherText, $this->AES_256_CBC, $bKey, OPENSSL_RAW_DATA, $iv);
         return $bPlaintext;
+    }
+
+    private function saveApiRequest($clientId, $transactionId, $productId, $consentRef, $createdAtTimestamp)
+    {
+        $requestId = ClientApiRequest::create([
+            'client_id' => $clientId,
+            'transaction_id' => $transactionId,
+            'product_id' => $productId,
+            'consent_ref' => $consentRef,
+            'created_at_timestamp' => $createdAtTimestamp,
+        ]);
+        return $requestId;
+    }
+
+    private function saveApiResponse($requestId, $statusCode, $statusDesc)
+    {
+        ClientApiResponse::create([
+            'request_id' => $requestId,
+            'status_code' => $statusCode,
+            'status_description' => $statusDesc,
+        ]);
     }
 }

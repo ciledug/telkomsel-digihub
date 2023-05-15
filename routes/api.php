@@ -25,10 +25,6 @@ Route::group(
             Route::get('/show', 'API\UserController@show')->name('api.user.show');
         });
 
-        // Route::prefix('v1/telco')->group(function() {
-        //     Route::post('request', 'API\v1\telco\TelcoRequestController@sendRequest')->name('api.telco.request.sendrequest');
-        // });
-
         Route::resource('v1', 'API\Telco\TelcoV1Controller');
         Route::resource('v2', 'API\Telco\TelcoV2Controller');
     }

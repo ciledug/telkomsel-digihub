@@ -31,7 +31,7 @@ class LoginController extends Controller
         ]);
 
         if ($validator->fails()) {
-            $this->RESPONSE['code'] = 401;
+            $this->RESPONSE['code'] = 403;
             $this->RESPONSE['message'] = 'Email or Password is incorrect.';
         }
         else {
@@ -48,8 +48,8 @@ class LoginController extends Controller
                 $this->RESPONSE['data']['token'] = $user->createToken(env('app.token_name'))->accessToken;
             }
             else {
-                $this->RESPONSE['code'] = 401;
-                $this->RESPONSE['message'] = 'Email or Password is incorrect.';
+                $this->RESPONSE['code'] = 404;
+                $this->RESPONSE['message'] = 'Account does not exist.';
             }
         }
         

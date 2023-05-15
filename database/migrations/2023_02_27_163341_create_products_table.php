@@ -3,12 +3,9 @@
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Database\Migrations\Migration;
-use Illuminate\Database\Eloquent\SoftDeletes;
 
-class CreateUsersTable extends Migration
+class CreateProductsTable extends Migration
 {
-    use SoftDeletes;
-    
     /**
      * Run the migrations.
      *
@@ -16,18 +13,15 @@ class CreateUsersTable extends Migration
      */
     public function up()
     {
-        Schema::create('users', function (Blueprint $table) {
+        Schema::create('products', function (Blueprint $table) {
             $table->engine = 'MyISAM';
             $table->collation = 'utf8mb4_unicode_ci';
 
             $table->increments('id');
-            $table->string('name', 50);
-            $table->string('email', 50)->unique()->nullable();
-            $table->string('username', 50)->unique();
-            $table->string('password');
-            $table->rememberToken();
+            $table->string('name', 30);
+            $table->string('telco_name', 30)->unique();
             $table->timestamps();
-            $table->softDeletes();
+            $table->timestamp('deleted_at')->nullable();
         });
     }
 
@@ -38,6 +32,6 @@ class CreateUsersTable extends Migration
      */
     public function down()
     {
-        Schema::dropIfExists('users');
+        Schema::dropIfExists('products');
     }
 }

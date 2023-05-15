@@ -14,11 +14,11 @@ class UserSeeder extends Seeder
      */
     public function run()
     {
-        User::create([
-            'name' => 'Dalnet Test',
-            'username' => 'dalnet-test',
-            'email' => 'dalnettest@gmail.com',
-            'password' => Hash::make('12345678'),
-        ]);
+        // User::create([
+        //     'name' => 'Dalnet Test',
+        //     'username' => 'dalnet-test',
+        //     'email' => 'dalnettest@gmail.com',
+        //     'password' => Hash::make('12345678'),
+        // ]);
     }
 }

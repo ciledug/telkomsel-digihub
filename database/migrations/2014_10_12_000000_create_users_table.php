@@ -25,6 +25,8 @@ class CreateUsersTable extends Migration
             $table->string('email', 50)->unique()->nullable();
             $table->string('username', 50)->unique();
             $table->string('password');
+            $table->boolean('status')->default(false)->nullable();
+            $table->tinyInteger('enc_key')->nullable()->comment('0:both, 1:dalnet_key, 2:client_key');
             $table->rememberToken();
             $table->timestamps();
             $table->softDeletes();

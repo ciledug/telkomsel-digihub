@@ -31,7 +31,6 @@ class CreateUserProfilesTable extends Migration
             $table->string('cp_position', 50)->nullable();
             $table->string('cp_email', 50)->nullable();
             $table->string('cp_phone', 50)->nullable();
-            $table->boolean('status')->default(false)->nullable();
 
             $table->timestamps();
         });

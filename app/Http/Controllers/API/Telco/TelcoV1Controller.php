@@ -109,7 +109,7 @@ class TelcoV1Controller extends Controller
                 
                 if (!empty($requestMessage)) {
                     $cipherText = $this->AESCBCEncrypt(json_encode($requestMessage), $this->ENCRYPTION_KEY);
-                    $requestMessage = $this->createRequestMessage($request, $cipherText);
+                    $requestMessage = $this->createRequestMessage($request, $cipherText); // dd($requestMessage); die();
     
                     $curl = curl_init();
     
@@ -135,34 +135,39 @@ class TelcoV1Controller extends Controller
                         )
                     );
     
-                    $response = curl_exec($curl); // dd(json_decode($response));
+                    $response = curl_exec($curl); // echo $response; die();
                     $err = curl_error($curl);
                     $jsonResponse = '';
                     
                     curl_close($curl);
                     
                     if ($err) {
-                        $this->RESPONSE['message'] = $err;
+                        $statusDesc = $err;
                         $jsonResponse = json_decode($response); // dd($jsonResponse); die();
 
                         if ($jsonResponse != null) {
                             $statusCode = $jsonResponse->data->api_response->transaction->status_code;
-                            $this->RESPONSE['message'] = $jsonResponse->data->api_response->transaction->status_desc;
+                            $statusDesc = $jsonResponse->data->api_response->transaction->status_desc;
                         }
                     }
                     else {
-                        $decipherResponse = $this->decipherResponse($response, $this->ENCRYPTION_KEY);
-                        unset($requestMessage['transaction']['partner_id']);
+                        $jsonResponse = json_decode($response); // dd($response); die();
+                        $decipherResponse = $this->decipherResponse($jsonResponse, $this->ENCRYPTION_KEY);
+
+                        unset($requestMessage['transaction']['partner_id'], $requestMessage['request']);
                         $requestMessage['transaction']['client_id'] = $request->client_id;
 
+                        unset($jsonResponse->response);
+
                         $this->RESPONSE['code'] = 200;
-                        $this->RESPONSE['message'] = json_decode($response)->transaction->status_desc;
+                        $this->RESPONSE['message'] = 'OK';
                         $this->RESPONSE['count'] = 1;
                         $this->RESPONSE['data']['api_request'] = $requestMessage;
-                        $this->RESPONSE['data']['api_response'] = json_decode($response);
+                        $this->RESPONSE['data']['api_response'] = $jsonResponse;
                         $this->RESPONSE['data']['api_result'] = $decipherResponse;
 
-                        $statusCode = json_decode($response)->transaction->status_code;
+                        $statusCode = $jsonResponse->transaction->status_code;
+                        $statusDesc = $jsonResponse->transaction->status_desc;
                     }
                 }
                 else {
@@ -177,7 +182,7 @@ class TelcoV1Controller extends Controller
         }
 
         // dd($this->RESPONSE);
-        $this->saveApiResponse($requestId->id, $statusCode, $this->RESPONSE['message']);
+        $this->saveApiResponse($requestId->id, $statusCode, $statusDesc);
         return response()->json($this->RESPONSE, 200);
     }
 
@@ -381,17 +386,17 @@ class TelcoV1Controller extends Controller
     }
 
     private function decipherResponse($jsonResponse, $encryptionKey) {
-        $result = '';
-        $response = json_decode($jsonResponse); //echo '<pre>'; print_r($response); echo '</pre>';
-        // echo AESCBCDecrypt($response->response->ciphertext, $ENCRYPTION_KEY);
+        // echo '<pre>'; print_r($jsonResponse); echo '</pre>';
+        // echo AESCBCDecrypt($jsonResponse->response->ciphertext, $ENCRYPTION_KEY);
 
-        $statusCode = (int) $response->transaction->status_code;
+        $result = '';
+        $statusCode = (int) $jsonResponse->transaction->status_code;
 
         if ($statusCode == 0) {
-            $result = json_decode($this->AESCBCDecrypt($response->response->ciphertext, $encryptionKey));
+            $result = json_decode($this->AESCBCDecrypt($jsonResponse->response->ciphertext, $encryptionKey));
         }
         else {
-            $result = $response->transaction->status_desc;
+            $result = $jsonResponse->transaction->status_desc;
         }
 
         return $result;
